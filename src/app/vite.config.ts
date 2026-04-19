@@ -23,6 +23,7 @@ const maxForks = process.env.CI
   : Math.max(cpuCount - 2, 2); // Leave headroom for system locally
 
 const API_PORT = process.env.API_PORT || '15500';
+const isVercelBuild = process.env.VERCEL === '1';
 
 const ignoredTestConsolePatterns = [
   /^Warning: .*not wrapped in act/,
@@ -93,7 +94,7 @@ export default {
   },
   build: {
     emptyOutDir: true,
-    outDir: '../../dist/src/app',
+    outDir: isVercelBuild ? 'dist' : '../../dist/src/app',
     // Enable source maps for production debugging
     sourcemap: process.env.NODE_ENV === 'production' ? 'hidden' : true,
     rolldownOptions: {
