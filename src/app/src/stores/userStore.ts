@@ -1,3 +1,4 @@
+import { IS_STATIC_HOSTED_DEMO } from '@app/constants';
 import { callApi, fetchUserId } from '@app/utils/api';
 import { create } from 'zustand';
 
@@ -20,6 +21,10 @@ export const useUserStore = create<UserState>((set, getState) => ({
   setEmail: (email: string) => set({ email }),
   setUserId: (userId: string) => set({ userId }),
   fetchEmail: async () => {
+    if (IS_STATIC_HOSTED_DEMO) {
+      set({ email: null, isLoading: false });
+      return;
+    }
     if (getState().email) {
       set({ isLoading: false });
       return;
@@ -38,6 +43,10 @@ export const useUserStore = create<UserState>((set, getState) => ({
     }
   },
   fetchUserId: async () => {
+    if (IS_STATIC_HOSTED_DEMO) {
+      set({ userId: null });
+      return;
+    }
     if (getState().userId) {
       return;
     }

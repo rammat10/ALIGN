@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
+import { IS_STATIC_HOSTED_DEMO } from '@app/constants';
 import { useUserStore } from '@app/stores/userStore';
 import posthog from 'posthog-js';
 import { PostHogContext, type PostHogContextType } from './PostHogContext';
@@ -16,6 +17,10 @@ interface PostHogProviderProps {
 export const PostHogProvider = ({ children }: PostHogProviderProps) => {
   const [isInitialized, setIsInitialized] = useState(false);
   const { email, userId, fetchEmail, fetchUserId } = useUserStore();
+
+  if (IS_STATIC_HOSTED_DEMO) {
+    return children;
+  }
 
   // Fetch user email and ID when component mounts
   useEffect(() => {

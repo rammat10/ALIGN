@@ -1,3 +1,4 @@
+import { IS_STATIC_HOSTED_DEMO } from '@app/constants';
 import { callApi } from '@app/utils/api';
 import { useQuery } from '@tanstack/react-query';
 
@@ -20,6 +21,12 @@ export function useApiHealth() {
   return useQuery<ApiHealthResult, Error>({
     queryKey: ['apiHealth'],
     queryFn: async () => {
+      if (IS_STATIC_HOSTED_DEMO) {
+        return {
+          status: 'disabled',
+          message: 'Static demo mode',
+        };
+      }
       try {
         const response = await callApi('/remote-health', { cache: 'no-store' });
         const { status, message } = (await response.json()) as HealthResponse;
@@ -34,7 +41,7 @@ export function useApiHealth() {
         };
       }
     },
-    refetchInterval: 3000, // Poll every 3 seconds
+    refetchInterval: IS_STATIC_HOSTED_DEMO ? false : 3000, // Poll every 3 seconds
     retry: false, // Failed queries will not be retried until the next poll
     staleTime: 2000, // Data is fresh for 2 seconds
     initialData: {

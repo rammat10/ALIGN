@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { IS_STATIC_HOSTED_DEMO } from '@app/constants';
 import { callApi } from '@app/utils/api';
 
 interface VersionInfo {
@@ -33,6 +34,11 @@ export function useVersionCheck(): UseVersionCheckResult {
   const isMountedRef = useRef(true);
 
   useEffect(() => {
+    if (IS_STATIC_HOSTED_DEMO) {
+      setLoading(false);
+      return;
+    }
+
     isMountedRef.current = true;
 
     const checkVersion = async () => {

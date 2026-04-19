@@ -1,3 +1,4 @@
+import { IS_STATIC_HOSTED_DEMO } from '@app/constants';
 import useApiConfig from '@app/stores/apiConfig';
 import type { UpdateEvalAuthorResponse } from '@promptfoo/types/api/eval';
 import type { GetUserIdResponse, GetUserResponse } from '@promptfoo/types/api/user';
@@ -12,6 +13,45 @@ export function getApiBaseUrl(): string {
 }
 
 export async function callApi(path: string, options: RequestInit = {}): Promise<Response> {
+  if (IS_STATIC_HOSTED_DEMO) {
+    if (path === '/version') {
+      return new Response(
+        JSON.stringify({
+          currentVersion: import.meta.env.VITE_PROMPTFOO_VERSION,
+          latestVersion: import.meta.env.VITE_PROMPTFOO_VERSION,
+          updateAvailable: false,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+
+    if (path === '/user/id') {
+      return new Response(JSON.stringify({ id: null }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (path === '/user/email') {
+      return new Response(JSON.stringify({ email: null }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (path === '/remote-health') {
+      return new Response(JSON.stringify({ status: 'DISABLED', message: 'Static demo mode' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    return new Response(JSON.stringify({ error: 'Static demo mode has no live API backend' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
   return fetch(`${getApiBaseUrl()}/api${path}`, options);
 }
 

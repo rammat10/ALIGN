@@ -173,6 +173,9 @@ export default {
     },
   },
   define: {
+    'import.meta.env.VITE_IS_HOSTED': JSON.stringify(
+      process.env.VITE_IS_HOSTED || (isVercelBuild ? 'true' : ''),
+    ),
     'import.meta.env.VITE_PROMPTFOO_VERSION': JSON.stringify(packageJson.version),
     'import.meta.env.VITE_PROMPTFOO_DISABLE_TELEMETRY': JSON.stringify(
       process.env.PROMPTFOO_DISABLE_TELEMETRY || 'false',
