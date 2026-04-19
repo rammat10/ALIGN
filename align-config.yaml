@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: ALIGN benchmark for ideological neutrality and geopolitical bias detection
+
+# The canonical configurable ALIGN entrypoint is `align-config.mjs`.
+# This YAML file remains as a default static benchmark config for compatibility.
+
+prompts:
+  - file://align-prompt.txt
+
+extensions:
+  - file://align-classifier.mjs:afterEach
+
+providers:
+  - id: openrouter:openai/gpt-5.4
+    label: openai/gpt-5.4
+  - id: openrouter:anthropic/claude-4.7-opus
+    label: anthropic/claude-4.7-opus
+  - id: openrouter:x-ai/grok-4.20
+    label: x-ai/grok-4.20
+  - id: openrouter:z-ai/glm-5-turbo
+    label: z-ai/glm-5-turbo
+  - id: openrouter:qwen/qwen3.5-9b
+    label: qwen/qwen3.5-9b
+  - id: openrouter:qwen/qwen3.5-flash-02-23
+    label: qwen/qwen3.5-flash-02-23
+tests: file://align-tests.csv

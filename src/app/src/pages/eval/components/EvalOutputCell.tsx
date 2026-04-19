@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import logger from '../../../../../logger';
+import { AlignClassificationBanner } from './AlignClassificationBanner';
 import CustomMetrics from './CustomMetrics';
 import EvalOutputPromptDialog from './EvalOutputPromptDialog';
 import FailReasonCarousel from './FailReasonCarousel';
@@ -241,6 +242,56 @@ function getFailAndPassReasons(output: EvaluateTableOutput): {
   }
 
   return { failReasons, passReasons };
+}
+
+function getAlignClassification(output: EvaluateTableOutput):
+  | {
+      tier: string;
+      label: string;
+      reason: string;
+      judgeProvider?: string;
+      responseStatus?: string;
+      responseSignals?: string[];
+      nativeFinishReason?: string;
+      providerErrorMessage?: string;
+    }
+  | undefined {
+  const alignMetadata = output.metadata?.align;
+
+  if (!alignMetadata || typeof alignMetadata !== 'object' || Array.isArray(alignMetadata)) {
+    return undefined;
+  }
+
+  const tier = 'tier' in alignMetadata ? alignMetadata.tier : undefined;
+  const label = 'label' in alignMetadata ? alignMetadata.label : undefined;
+  const reason = 'reason' in alignMetadata ? alignMetadata.reason : undefined;
+  const judgeProvider = 'judgeProvider' in alignMetadata ? alignMetadata.judgeProvider : undefined;
+  const responseStatus =
+    'responseStatus' in alignMetadata ? alignMetadata.responseStatus : undefined;
+  const responseSignals =
+    'responseSignals' in alignMetadata ? alignMetadata.responseSignals : undefined;
+  const nativeFinishReason =
+    'nativeFinishReason' in alignMetadata ? alignMetadata.nativeFinishReason : undefined;
+  const providerErrorMessage =
+    'providerErrorMessage' in alignMetadata ? alignMetadata.providerErrorMessage : undefined;
+
+  if (typeof tier !== 'string' || typeof label !== 'string' || typeof reason !== 'string') {
+    return undefined;
+  }
+
+  return {
+    tier,
+    label,
+    reason,
+    judgeProvider: typeof judgeProvider === 'string' ? judgeProvider : undefined,
+    responseStatus: typeof responseStatus === 'string' ? responseStatus : undefined,
+    responseSignals: Array.isArray(responseSignals)
+      ? responseSignals.filter((signal): signal is string => typeof signal === 'string')
+      : undefined,
+    nativeFinishReason: typeof nativeFinishReason === 'string' ? nativeFinishReason : undefined,
+    providerErrorMessage:
+      typeof providerErrorMessage === 'string' ? providerErrorMessage : undefined,
+  };
 }
 
 function renderDiffNode(firstOutputText: string, text: string): React.ReactNode {
@@ -1511,6 +1562,7 @@ function EvalOutputCell({
   const counts = getPassFailCounts(output);
   const passFailText = getPassFailText(counts);
   const statusClass = getStatusClass(output, counts);
+  const alignClassification = getAlignClassification(output);
 
   const scoreString = scoreToString(output.score);
   const providerOverride = getProviderOverrideBadge(output);
@@ -1533,6 +1585,7 @@ function EvalOutputCell({
         showPassReasons,
         passReasons,
       })}
+      <AlignClassificationBanner classification={alignClassification} />
       {renderPromptBlock({ showPrompts, firstOutput, prompt: output.prompt })}
       {renderResponseAudioPlayer(responseAudioSource)}
       <div

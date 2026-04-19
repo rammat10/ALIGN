@@ -14,6 +14,7 @@ import { Input } from '@app/components/ui/input';
 import { Label } from '@app/components/ui/label';
 import { Spinner } from '@app/components/ui/spinner';
 import { usePageMeta } from '@app/hooks/usePageMeta';
+import { APP_BRAND_FULL_NAME } from '@app/lib/branding';
 import { cn } from '@app/lib/utils';
 import { useUserStore } from '@app/stores/userStore';
 import { callApi } from '@app/utils/api';
@@ -69,8 +70,8 @@ export default function LoginPage() {
   const { email, isLoading, setEmail, fetchEmail } = useUserStore();
 
   usePageMeta({
-    title: 'Login to Promptfoo',
-    description: 'Sign in to access your Promptfoo workspace',
+    title: `Login to ${APP_BRAND_FULL_NAME}`,
+    description: `Sign in to access your ${APP_BRAND_FULL_NAME} workspace`,
   });
 
   useEffect(() => {
@@ -128,14 +129,14 @@ export default function LoginPage() {
           {/* Logo and Header */}
           <div className="mb-8 flex flex-col items-center space-y-4 text-center">
             <div className="flex items-center gap-2">
-              <img src={logoPanda} alt="Promptfoo" className="size-10" />
-              <h1 className="text-2xl font-semibold tracking-tight">promptfoo</h1>
+              <img src={logoPanda} alt={APP_BRAND_FULL_NAME} className="size-10" />
+              <h1 className="text-2xl font-semibold tracking-tight">{APP_BRAND_FULL_NAME}</h1>
             </div>
 
             <h2 className="text-xl text-foreground">
               {new URLSearchParams(location.search).get('type') === 'report'
                 ? 'View Report'
-                : 'Welcome to Promptfoo'}
+                : `Welcome to ${APP_BRAND_FULL_NAME}`}
             </h2>
 
             <p className="max-w-sm text-sm text-muted-foreground">

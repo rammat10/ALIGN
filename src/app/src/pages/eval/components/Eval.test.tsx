@@ -285,7 +285,9 @@ describe('Eval', () => {
 
     // Should show loading state, NOT empty state
     expect(queryByText('Waiting for eval data')).toBeInTheDocument();
-    expect(queryByText('Welcome to Promptfoo')).not.toBeInTheDocument();
+    expect(
+      queryByText('Welcome to ALIGN: Analysis of LLM Ideology and Geopolitical Neutrality'),
+    ).not.toBeInTheDocument();
   });
 
   it('should show results when table is available', async () => {

@@ -1,3 +1,4 @@
+import { APP_BRAND_FULL_NAME } from '@app/lib/branding';
 import { renderWithProviders } from '@app/utils/testutils';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -13,12 +14,12 @@ describe('InfoModal', () => {
 
   it('does not render when closed', () => {
     renderWithProviders(<InfoModal open={false} onClose={mockOnClose} />);
-    expect(screen.queryByText('About Promptfoo')).not.toBeInTheDocument();
+    expect(screen.queryByText(`About ${APP_BRAND_FULL_NAME}`)).not.toBeInTheDocument();
   });
 
   it('displays the correct title', () => {
     renderWithProviders(<InfoModal open={true} onClose={mockOnClose} />);
-    expect(screen.getByText('About Promptfoo')).toBeInTheDocument();
+    expect(screen.getByText(`About ${APP_BRAND_FULL_NAME}`)).toBeInTheDocument();
   });
 
   it('displays the correct version', () => {
@@ -29,7 +30,9 @@ describe('InfoModal', () => {
 
   it('displays the correct description', () => {
     renderWithProviders(<InfoModal open={true} onClose={mockOnClose} />);
-    expect(screen.getByText(/Promptfoo is a MIT licensed open-source tool/)).toBeInTheDocument();
+    expect(
+      screen.getByText(new RegExp(`${APP_BRAND_FULL_NAME} is built on the promptfoo framework`)),
+    ).toBeInTheDocument();
   });
 
   it('renders all links correctly', () => {
@@ -48,7 +51,6 @@ describe('InfoModal', () => {
   it('calls onClose when Close button is clicked', async () => {
     const user = userEvent.setup();
     renderWithProviders(<InfoModal open={true} onClose={mockOnClose} />);
-    // Find the Close button in the footer (not the dialog X button)
     const closeButtons = screen.getAllByRole('button', { name: 'Close' });
     const footerCloseButton = closeButtons.find((btn) => btn.textContent === 'Close');
     await user.click(footerCloseButton!);
@@ -58,7 +60,7 @@ describe('InfoModal', () => {
   it('has accessible dialog with title', () => {
     renderWithProviders(<InfoModal open={true} onClose={mockOnClose} />);
     const dialog = screen.getByRole('dialog');
-    expect(dialog).toHaveAccessibleName('About Promptfoo');
+    expect(dialog).toHaveAccessibleName(`About ${APP_BRAND_FULL_NAME}`);
   });
 
   it('has correct link targets', () => {

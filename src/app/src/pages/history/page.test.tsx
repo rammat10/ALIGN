@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { EvalHistoryProvider } from '@app/contexts/EvalHistoryContext';
+import { APP_BRAND_FULL_NAME } from '@app/lib/branding';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -66,7 +67,7 @@ describe('HistoryPage', () => {
     renderWithProviders(<HistoryPage />);
 
     await waitFor(() => {
-      expect(document.title).toBe('History | promptfoo');
+      expect(document.title).toBe(`History | ${APP_BRAND_FULL_NAME}`);
     });
 
     const descriptionMetaTag = document.querySelector('meta[name="description"]');

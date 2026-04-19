@@ -1,6 +1,7 @@
 import logo from '@app/assets/logo.svg';
 import { Button } from '@app/components/ui/button';
 import { Card } from '@app/components/ui/card';
+import { APP_BRAND_FULL_NAME } from '@app/lib/branding';
 import { BarChart2, ExternalLink, Shield } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -11,8 +12,8 @@ const EmptyState = () => {
     <div className="flex justify-center items-center min-h-[50vh]">
       <Card className="p-8 text-center max-w-[500px] shadow-lg">
         <div className="flex flex-row gap-2 items-center justify-center mb-4">
-          <img src={logo} alt="Promptfoo logo" style={{ width: 48, height: 48 }} />
-          <h2 className="text-xl font-semibold">Welcome to Promptfoo</h2>
+          <img src={logo} alt={`${APP_BRAND_FULL_NAME} logo`} style={{ width: 48, height: 48 }} />
+          <h2 className="text-xl font-semibold">Welcome to {APP_BRAND_FULL_NAME}</h2>
         </div>
         <p className="text-muted-foreground mb-6">Get started by creating an eval or red team</p>
         <div className="flex gap-4 justify-center">

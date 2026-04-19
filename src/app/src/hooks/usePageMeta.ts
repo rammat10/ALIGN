@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
 
+import { APP_BRAND_FULL_NAME } from '@app/lib/branding';
+
 interface PageMetaOptions {
   title: string;
   description?: string;
@@ -18,12 +20,12 @@ export function usePageMeta({ title, description, image }: PageMetaOptions) {
     const ogImageTag = document.querySelector('meta[property="og:image"]');
     const defaultOgImage = ogImageTag?.getAttribute('content') || '';
 
-    document.title = `${title} | promptfoo`;
+    document.title = `${title} | ${APP_BRAND_FULL_NAME}`;
     if (description && descriptionTag) {
       descriptionTag.setAttribute('content', description);
     }
     if (ogTitleTag) {
-      ogTitleTag.setAttribute('content', `${title} | promptfoo`);
+      ogTitleTag.setAttribute('content', `${title} | ${APP_BRAND_FULL_NAME}`);
     }
     if (description && ogDescriptionTag) {
       ogDescriptionTag.setAttribute('content', description);

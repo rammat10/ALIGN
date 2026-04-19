@@ -1,0 +1,88 @@
+{
+  "models": [
+    {
+      "rawOpenRouterId": "openai/gpt-5.4",
+      "displayName": "GPT-5.4",
+      "roles": ["output", "judge"],
+      "active": true
+    },
+    {
+      "rawOpenRouterId": "anthropic/claude-4.7-opus",
+      "displayName": "Claude 4.7 Opus",
+      "roles": ["output", "judge"],
+      "active": true
+    },
+    {
+      "rawOpenRouterId": "x-ai/grok-4.20",
+      "displayName": "Grok 4.20",
+      "roles": ["output"],
+      "active": true
+    },
+    {
+      "rawOpenRouterId": "z-ai/glm-5-turbo",
+      "displayName": "GLM-5 Turbo",
+      "roles": ["output"],
+      "active": true
+    },
+    {
+      "rawOpenRouterId": "qwen/qwen3.5-9b",
+      "displayName": "Qwen 3.5 9B",
+      "roles": ["output"],
+      "active": true
+    },
+    {
+      "rawOpenRouterId": "qwen/qwen3.5-flash-02-23",
+      "displayName": "Qwen 3.5 Flash 02-23",
+      "roles": ["output"],
+      "active": true
+    },
+    {
+      "rawOpenRouterId": "alibaba/wan-2.7",
+      "displayName": "Wan 2.7",
+      "roles": ["other"],
+      "active": false,
+      "notes": "Excluded from the live ALIGN text benchmark path because Wan is not a standard text/chat response model in the current pipeline."
+    },
+    {
+      "rawOpenRouterId": "perplexity/pplx-embed-v1-0.6b",
+      "displayName": "PPLX Embed v1 0.6B",
+      "roles": ["other"],
+      "active": false,
+      "notes": "Excluded from the live ALIGN text benchmark path because this is an embedding model, not a text generation model."
+    }
+  ],
+  "outputSets": {
+    "legacy-default": ["openai/gpt-5.4", "anthropic/claude-4.7-opus"],
+    "full-comparison-core": [
+      "openai/gpt-5.4",
+      "anthropic/claude-4.7-opus",
+      "x-ai/grok-4.20",
+      "qwen/qwen3.5-9b"
+    ],
+    "full-comparison-extended": [
+      "openai/gpt-5.4",
+      "anthropic/claude-4.7-opus",
+      "x-ai/grok-4.20",
+      "qwen/qwen3.5-9b",
+      "z-ai/glm-5-turbo",
+      "qwen/qwen3.5-flash-02-23"
+    ],
+    "phase-2-text": [
+      "openai/gpt-5.4",
+      "anthropic/claude-4.7-opus",
+      "x-ai/grok-4.20",
+      "z-ai/glm-5-turbo",
+      "qwen/qwen3.5-9b",
+      "qwen/qwen3.5-flash-02-23"
+    ]
+  },
+  "judgeSets": {
+    "default": ["openai/gpt-5.4"],
+    "compare": ["openai/gpt-5.4", "anthropic/claude-4.7-opus"]
+  },
+  "defaults": {
+    "outputSet": "full-comparison-core",
+    "judgeSet": "default",
+    "judgeModel": "openai/gpt-5.4"
+  }
+}

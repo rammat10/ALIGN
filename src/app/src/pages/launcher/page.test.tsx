@@ -1,5 +1,6 @@
 import { TooltipProvider } from '@app/components/ui/tooltip';
 import { type ApiHealthResult, useApiHealth } from '@app/hooks/useApiHealth';
+import { APP_BRAND_FULL_NAME, APP_BRAND_SHORT_NAME } from '@app/lib/branding';
 import {
   mockMatchMedia as installMatchMedia,
   mockBrowserProperty,
@@ -61,14 +62,16 @@ describe('LauncherPage', () => {
   it('renders welcome message', async () => {
     renderLauncher();
     await waitFor(() => {
-      expect(screen.getByText('Welcome to Promptfoo')).toBeInTheDocument();
+      expect(screen.getByText(`Welcome to ${APP_BRAND_FULL_NAME}`)).toBeInTheDocument();
     });
   });
 
   it('shows connecting status initially', async () => {
     renderLauncher();
     await waitFor(() => {
-      expect(screen.getByText(/Connecting to Promptfoo on localhost:15500/)).toBeInTheDocument();
+      expect(
+        screen.getByText(new RegExp(`Connecting to ${APP_BRAND_SHORT_NAME} on localhost:15500`)),
+      ).toBeInTheDocument();
       expect(screen.getByRole('progressbar')).toBeInTheDocument();
     });
   });
@@ -84,7 +87,7 @@ describe('LauncherPage', () => {
 
   it('sets dark mode from the theme selector', async () => {
     mockLocalStorage.getItem.mockReturnValue(null);
-    document.documentElement.removeAttribute('data-theme'); // Ensure light mode at start
+    document.documentElement.removeAttribute('data-theme');
     renderLauncher();
 
     await act(async () => {

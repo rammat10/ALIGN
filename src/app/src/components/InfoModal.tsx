@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@app/components/ui/dialog';
+import { APP_BRAND_FULL_NAME } from '@app/lib/branding';
 import { cn } from '@app/lib/utils';
 import { BookOpen, Bug, Calendar, ExternalLink, GitBranch, MessageCircle } from 'lucide-react';
 
@@ -46,7 +47,7 @@ export default function InfoModal<T extends { open: boolean; onClose: () => void
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>About Promptfoo</DialogTitle>
+          <DialogTitle>About {APP_BRAND_FULL_NAME}</DialogTitle>
           <a
             href="https://github.com/promptfoo/promptfoo/releases"
             target="_blank"
@@ -57,9 +58,9 @@ export default function InfoModal<T extends { open: boolean; onClose: () => void
           </a>
         </DialogHeader>
         <DialogDescription>
-          Promptfoo is a MIT licensed open-source tool for evaluating and red-teaming LLMs. We make
-          it easy to track the performance of your models and prompts over time with automated
-          support for dataset generation and grading.
+          {APP_BRAND_FULL_NAME} is built on the promptfoo framework to evaluate ideological
+          neutrality, compare model behavior across providers, and track rubric-based geopolitical
+          analysis over time.
         </DialogDescription>
         <div className="flex flex-col gap-3 mt-2">
           {links.map((item, index) => (

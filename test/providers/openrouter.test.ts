@@ -996,6 +996,122 @@ describe('OpenRouter', () => {
           numRequests: 1,
         });
       });
+
+      it('surfaces per-choice upstream errors instead of treating partial content as success', async () => {
+        const qwenProvider = new OpenRouterProvider('qwen/qwen3.5-flash-02-23', {});
+
+        const mockResponse = {
+          choices: [
+            {
+              error: {
+                code: 502,
+                message:
+                  'Upstream error from Alibaba: <400> InternalError.Algo.DataInspectionFailed: Output data may contain inappropriate content.',
+              },
+              message: {
+                content: 'Xi',
+                reasoning: 'Internal provider reasoning that should not be treated as success.',
+              },
+            },
+          ],
+          usage: { total_tokens: 415, prompt_tokens: 5, completion_tokens: 410 },
+        };
+
+        const response = new Response(JSON.stringify(mockResponse), {
+          status: 200,
+          statusText: 'OK',
+          headers: new Headers({ 'Content-Type': 'application/json' }),
+        });
+        mockedFetchWithRetries.mockResolvedValueOnce(response);
+
+        const result = await qwenProvider.callApi('Who is Xi Jinping?');
+
+        expect(result.error).toContain('DataInspectionFailed');
+        expect(result.output).toBeUndefined();
+        expect(result.raw).toEqual(mockResponse);
+      });
+
+      it('retries transient OpenRouter 503 errors returned in the response body', async () => {
+        const retryingProvider = new OpenRouterProvider('qwen/qwen3.5-9b', {});
+
+        const transientErrorResponse = new Response(
+          JSON.stringify({
+            error: {
+              code: 503,
+              message: 'Upstream provider temporarily unavailable. Please retry shortly.',
+            },
+          }),
+          {
+            status: 200,
+            statusText: 'OK',
+            headers: new Headers({ 'Content-Type': 'application/json' }),
+          },
+        );
+
+        const successResponse = new Response(
+          JSON.stringify({
+            choices: [
+              {
+                finish_reason: 'stop',
+                message: {
+                  content: 'Recovered output after one retry.',
+                },
+              },
+            ],
+            usage: { total_tokens: 20, prompt_tokens: 8, completion_tokens: 12 },
+          }),
+          {
+            status: 200,
+            statusText: 'OK',
+            headers: new Headers({ 'Content-Type': 'application/json' }),
+          },
+        );
+
+        mockedFetchWithRetries.mockResolvedValueOnce(transientErrorResponse);
+        mockedFetchWithRetries.mockResolvedValueOnce(successResponse);
+
+        const result = await retryingProvider.callApi('Retryable prompt');
+
+        expect(result.error).toBeUndefined();
+        expect(result.output).toBe('Recovered output after one retry.');
+        expect(mockedFetchWithRetries).toHaveBeenCalledTimes(2);
+      });
+
+      it('preserves OpenRouter native finish reason metadata on success', async () => {
+        const glmProvider = new OpenRouterProvider('z-ai/glm-5-turbo', {});
+
+        const response = new Response(
+          JSON.stringify({
+            provider: 'Z.AI',
+            choices: [
+              {
+                finish_reason: 'stop',
+                native_finish_reason: 'sensitive',
+                message: {
+                  content: '',
+                },
+              },
+            ],
+            usage: { total_tokens: 9, prompt_tokens: 5, completion_tokens: 4 },
+          }),
+          {
+            status: 200,
+            statusText: 'OK',
+            headers: new Headers({ 'Content-Type': 'application/json' }),
+          },
+        );
+
+        mockedFetchWithRetries.mockResolvedValueOnce(response);
+
+        const result = await glmProvider.callApi('Test prompt');
+
+        expect(result.metadata).toMatchObject({
+          openrouter: {
+            provider: 'Z.AI',
+            nativeFinishReason: 'sensitive',
+          },
+        });
+      });
     });
   });
 });

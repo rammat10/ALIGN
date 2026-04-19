@@ -1,0 +1,5 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "./build-align.sh",
+  "outputDirectory": "out"
+}

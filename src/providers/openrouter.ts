@@ -15,6 +15,28 @@ import type {
   ProviderResponse,
 } from '../types/providers';
 
+interface OpenAIErrorResponse {
+  error: {
+    message: string;
+    type?: string;
+    code?: string;
+  };
+}
+
+type OpenRouterChatCompletionResponse = OpenAI.ChatCompletion & {
+  provider?: string;
+  error?: {
+    code?: string;
+    message?: string;
+  };
+};
+
+type OpenRouterChoiceError = {
+  code?: string | number;
+  message?: string;
+  metadata?: unknown;
+};
+
 /**
  * OpenRouter provider extends OpenAI chat completion provider with special handling
  * for models like Gemini that include thinking/reasoning tokens.
@@ -120,24 +142,6 @@ export class OpenRouterProvider extends OpenAiChatCompletionProvider {
     // Make the API call directly
     logger.debug(`Calling OpenRouter API: model=${this.modelName}`);
 
-    // OpenAI SDK has APIError class for exceptions, but not a type for error responses
-    // in the JSON body. This interface represents the structure when the API returns
-    // an error object in the response body (not as an exception).
-    interface OpenAIErrorResponse {
-      error: {
-        message: string;
-        type?: string;
-        code?: string;
-      };
-    }
-
-    type OpenRouterChatCompletionResponse = OpenAI.ChatCompletion & {
-      error?: {
-        code?: string;
-        message?: string;
-      };
-    };
-
     let data: OpenRouterChatCompletionResponse;
     let status: number;
     let statusText: string;
@@ -175,13 +179,31 @@ export class OpenRouterProvider extends OpenAiChatCompletionProvider {
     }
 
     if (data.error) {
-      return {
-        error: formatOpenAiError(data as OpenAIErrorResponse),
-      };
+      return await this.handleOpenRouterError(
+        data.error,
+        data as OpenAIErrorResponse,
+        prompt,
+        context,
+        callApiOptions,
+      );
     }
 
     // Process the response with special handling for Gemini
     const message: any = data.choices[0].message;
+    const choiceError = (
+      data.choices[0] as OpenAI.ChatCompletion.Choice & {
+        error?: OpenRouterChoiceError;
+      }
+    ).error;
+    if (choiceError?.message) {
+      return await this.handleOpenRouterChoiceError(
+        choiceError,
+        data,
+        prompt,
+        context,
+        callApiOptions,
+      );
+    }
     const finishReason = normalizeFinishReason(data.choices[0].finish_reason);
 
     // Prioritize tool calls over content and reasoning
@@ -230,7 +252,104 @@ export class OpenRouterProvider extends OpenAiChatCompletionProvider {
         data.usage?.prompt_tokens,
         data.usage?.completion_tokens,
       ),
+      metadata: {
+        openrouter: {
+          provider: data.provider,
+          nativeFinishReason:
+            (
+              data.choices[0] as OpenAI.ChatCompletion.Choice & {
+                native_finish_reason?: string;
+              }
+            ).native_finish_reason ?? null,
+        },
+      },
       ...(finishReason && { finishReason }),
+    };
+  }
+
+  private isRetryableOpenRouterError(error: { code?: string | number; message?: string }): boolean {
+    const code = typeof error.code === 'string' ? Number(error.code) : error.code;
+    const message = error.message?.toLowerCase() || '';
+
+    return (
+      code === 503 ||
+      message.includes('503') ||
+      message.includes('service unavailable') ||
+      message.includes('temporarily unavailable')
+    );
+  }
+
+  private async retryOpenRouterCall(
+    prompt: string,
+    context?: CallApiContextParams,
+    callApiOptions?: CallApiOptionsParams,
+  ): Promise<ProviderResponse> {
+    logger.warn(`[OpenRouter] Retrying transient upstream error for model=${this.modelName}`);
+    return await this.executeOpenRouterCall(prompt, context, callApiOptions);
+  }
+
+  private async handleOpenRouterError(
+    error: { code?: string | number; message?: string },
+    data: OpenAIErrorResponse,
+    prompt: string,
+    context?: CallApiContextParams,
+    callApiOptions?: CallApiOptionsParams,
+  ): Promise<ProviderResponse> {
+    if (this.isRetryableOpenRouterError(error) && !callApiOptions?.abortSignal?.aborted) {
+      return await this.retryOpenRouterCall(prompt, context, callApiOptions);
+    }
+
+    return {
+      error: formatOpenAiError(data),
+      metadata: {
+        openrouter: {
+          errorCode: error.code ?? null,
+          errorMessage: error.message ?? null,
+        },
+      },
+    };
+  }
+
+  private async handleOpenRouterChoiceError(
+    choiceError: {
+      code?: string | number;
+      message?: string;
+      metadata?: unknown;
+    },
+    data: OpenRouterChatCompletionResponse,
+    prompt: string,
+    context?: CallApiContextParams,
+    callApiOptions?: CallApiOptionsParams,
+  ): Promise<ProviderResponse> {
+    if (this.isRetryableOpenRouterError(choiceError) && !callApiOptions?.abortSignal?.aborted) {
+      return await this.retryOpenRouterCall(prompt, context, callApiOptions);
+    }
+
+    return {
+      error: `API error: ${choiceError.message || 'Unknown OpenRouter choice error'}, Code: ${choiceError.code ?? 'unknown'}\n\n${JSON.stringify(
+        { error: choiceError },
+        null,
+        2,
+      )}`,
+      metadata: {
+        http: {
+          status: 200,
+          statusText: 'OK',
+        },
+        openrouter: {
+          choiceErrorCode: choiceError.code ?? null,
+          choiceErrorMessage: choiceError.message ?? null,
+          choiceErrorMetadata: choiceError.metadata ?? null,
+          provider: data.provider,
+          nativeFinishReason:
+            (
+              data.choices[0] as OpenAI.ChatCompletion.Choice & {
+                native_finish_reason?: string;
+              }
+            ).native_finish_reason ?? null,
+        },
+      },
+      raw: data,
     };
   }
 }

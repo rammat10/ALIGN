@@ -8,6 +8,7 @@ import { Spinner } from '@app/components/ui/spinner';
 import { EVAL_ROUTES } from '@app/constants/routes';
 import { useApiHealth } from '@app/hooks/useApiHealth';
 import { usePageMeta } from '@app/hooks/usePageMeta';
+import { APP_BRAND_FULL_NAME, APP_BRAND_SHORT_NAME } from '@app/lib/branding';
 import { cn } from '@app/lib/utils';
 import useApiConfig from '@app/stores/apiConfig';
 import { CheckCircle } from 'lucide-react';
@@ -108,9 +109,13 @@ export default function LauncherPage() {
 
       {/* Header section */}
       <div className="mb-8 flex w-full max-w-[600px] flex-col items-center sm:mb-10">
-        <img src={logoPanda} alt="Promptfoo Logo" className="mb-6 size-16 lg:size-20" />
+        <img
+          src={logoPanda}
+          alt={`${APP_BRAND_FULL_NAME} Logo`}
+          className="mb-6 size-16 lg:size-20"
+        />
         <h1 className="mb-6 text-center text-2xl font-light sm:text-3xl md:text-4xl">
-          Welcome to Promptfoo
+          Welcome to {APP_BRAND_FULL_NAME}
         </h1>
 
         <div
@@ -121,13 +126,13 @@ export default function LauncherPage() {
         >
           {isConnecting ? (
             <>
-              Connecting to Promptfoo on localhost:15500
+              Connecting to {APP_BRAND_SHORT_NAME} on localhost:15500
               <Spinner size="sm" />
             </>
           ) : (
             <>
               <CheckCircle className="size-4" />
-              Connected to Promptfoo successfully!
+              Connected to {APP_BRAND_SHORT_NAME} successfully!
             </>
           )}
         </div>

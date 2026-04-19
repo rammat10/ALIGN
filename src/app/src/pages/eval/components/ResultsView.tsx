@@ -15,6 +15,7 @@ import { SearchInput } from '@app/components/ui/search-input';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@app/components/ui/select';
 import { Separator } from '@app/components/ui/separator';
 import { Spinner } from '@app/components/ui/spinner';
+import { Tabs, TabsList, TabsTrigger } from '@app/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@app/components/ui/tooltip';
 import { IS_RUNNING_LOCALLY } from '@app/constants';
 import { EVAL_ROUTES, ROUTES } from '@app/constants/routes';
@@ -24,9 +25,22 @@ import { callApi } from '@app/utils/api';
 import { displayNameOverrides } from '@promptfoo/redteam/constants/metadata';
 import { formatPolicyIdentifierAsMetric } from '@promptfoo/redteam/plugins/policy/utils';
 import invariant from '@promptfoo/util/invariant';
-import { BarChart, Copy, Edit, Eye, Play, Settings, Share, Trash2, X } from 'lucide-react';
+import { BarChart, Copy, Edit, Eye, Play, Settings, Share, Target, Trash2, X } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDebouncedCallback } from 'use-debounce';
+import { AlignAboutView } from './AlignAboutView';
+import { AlignComparisonView } from './AlignComparisonView';
+import { AlignOverview } from './AlignOverview';
+import {
+  ALIGN_TIER_DEFINITIONS,
+  ALIGN_TIER_ORDER,
+  type AlignFilters,
+  buildAlignResultRecords,
+  filterAlignRecords,
+  getAlignFilterOptions,
+  getModelDisplayName,
+  getTierColorClass,
+} from './alignViewModel';
 import { ColumnSelector } from './ColumnSelector';
 import CompareEvalMenuItem from './CompareEvalMenuItem';
 import ConfigModal from './ConfigModal';
@@ -53,6 +67,11 @@ import type { ActiveView } from './EvalHeader';
 import type { ResultsFilter } from './store';
 
 const Report = React.lazy(() => import('@app/pages/redteam/report/components/Report'));
+type AlignSurface = 'overview' | 'comparison' | 'about' | 'audit';
+type AlignModelScope = {
+  primaryModel: string;
+  comparisonModel: string;
+};
 
 interface ResultsViewProps {
   recentEvals: ResultLightweightWithLabel[];
@@ -228,6 +247,144 @@ function ResultsChartsSection({
   );
 }
 
+function AlignTierLegend() {
+  return (
+    <div className="flex flex-wrap gap-2 rounded-xl border border-zinc-800 bg-zinc-950/95 px-3 py-3 text-zinc-100 shadow-sm">
+      <div className="mr-2 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
+        Tier legend
+      </div>
+      {ALIGN_TIER_ORDER.map((tier) => (
+        <Tooltip key={tier}>
+          <TooltipTrigger asChild>
+            <Badge variant="outline" className={getTierColorClass(tier)}>
+              {tier}
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-sm">{ALIGN_TIER_DEFINITIONS[tier]}</TooltipContent>
+        </Tooltip>
+      ))}
+    </div>
+  );
+}
+
+interface AlignActiveFiltersBarProps {
+  alignFilters: AlignFilters;
+  alignModelScope: AlignModelScope;
+  primaryModelDisplay?: string;
+  comparisonModelDisplay?: string;
+  onRemove: (
+    key:
+      | 'searchText'
+      | 'outputModel'
+      | 'judgeModel'
+      | 'promptClassification'
+      | 'focusArea'
+      | 'tier'
+      | 'responseStatus'
+      | 'primaryModel'
+      | 'comparisonModel',
+  ) => void;
+  onClearAll: () => void;
+}
+
+function AlignActiveFiltersBar({
+  alignFilters,
+  alignModelScope,
+  primaryModelDisplay,
+  comparisonModelDisplay,
+  onRemove,
+  onClearAll,
+}: AlignActiveFiltersBarProps) {
+  const chips = [
+    alignModelScope.primaryModel === 'all'
+      ? null
+      : {
+          key: 'primaryModel' as const,
+          label: `Model: ${primaryModelDisplay || alignModelScope.primaryModel}`,
+        },
+    alignModelScope.comparisonModel === 'none'
+      ? null
+      : {
+          key: 'comparisonModel' as const,
+          label: `Compare: ${comparisonModelDisplay || alignModelScope.comparisonModel}`,
+        },
+    alignFilters.outputModel === 'all'
+      ? null
+      : { key: 'outputModel' as const, label: `Output: ${alignFilters.outputModel}` },
+    alignFilters.judgeModel === 'all'
+      ? null
+      : { key: 'judgeModel' as const, label: `Judge: ${alignFilters.judgeModel}` },
+    alignFilters.promptClassification === 'all'
+      ? null
+      : {
+          key: 'promptClassification' as const,
+          label: `Prompt class: ${alignFilters.promptClassification}`,
+        },
+    alignFilters.focusArea === 'all'
+      ? null
+      : { key: 'focusArea' as const, label: `Focus area: ${alignFilters.focusArea}` },
+    alignFilters.tier === 'all'
+      ? null
+      : { key: 'tier' as const, label: `Tier: ${alignFilters.tier}` },
+    alignFilters.responseStatus === 'all'
+      ? null
+      : { key: 'responseStatus' as const, label: `Response: ${alignFilters.responseStatus}` },
+    alignFilters.searchText.trim()
+      ? { key: 'searchText' as const, label: `Search: ${alignFilters.searchText.trim()}` }
+      : null,
+  ].filter(
+    (
+      chip,
+    ): chip is {
+      key:
+        | 'searchText'
+        | 'outputModel'
+        | 'judgeModel'
+        | 'promptClassification'
+        | 'focusArea'
+        | 'tier'
+        | 'responseStatus'
+        | 'primaryModel'
+        | 'comparisonModel';
+      label: string;
+    } => chip !== null,
+  );
+
+  if (chips.length === 0) {
+    return (
+      <div className="sticky top-2 z-20 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950/95 px-3 py-3 text-zinc-100 shadow-lg backdrop-blur">
+        <div className="text-sm text-zinc-400">
+          No active ALIGN filters. Showing the default dashboard view.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="sticky top-2 z-20 flex flex-wrap items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950/95 px-3 py-3 text-zinc-100 shadow-lg backdrop-blur">
+      <div className="mr-2 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
+        Active filters
+      </div>
+      {chips.map((chip) => (
+        <Badge key={chip.key} variant="secondary" className="gap-1 text-xs">
+          {chip.label}
+          <button
+            type="button"
+            onClick={() => onRemove(chip.key)}
+            className="rounded-full hover:bg-muted"
+          >
+            <X className="size-3" />
+          </button>
+        </Badge>
+      ))}
+      <div className="flex-1" />
+      <Button variant="ghost" size="sm" onClick={onClearAll}>
+        Clear all filters
+      </Button>
+    </div>
+  );
+}
+
 export default function ResultsView({
   recentEvals,
   onRecentEvalSelected,
@@ -334,6 +491,232 @@ export default function ResultsView({
 
   invariant(table, 'Table data must be loaded before rendering ResultsView');
   const { head } = table;
+  const currentEvalId = evalId || defaultEvalId || 'default';
+  const validEvalId = evalId || defaultEvalId;
+  const currentEvalData = React.useMemo(
+    () => recentEvals.find((e) => e.evalId === evalId),
+    [recentEvals, evalId],
+  );
+
+  const alignRecords = React.useMemo(
+    () =>
+      buildAlignResultRecords({
+        table,
+        evalId: currentEvalId,
+        timestamp: currentEvalData?.createdAt == null ? null : String(currentEvalData.createdAt),
+      }),
+    [table, currentEvalId, currentEvalData?.createdAt],
+  );
+  const hasAlignResults = alignRecords.length > 0;
+
+  const surfaceParam = searchParams.get('surface');
+  const activeAlignSurface: AlignSurface =
+    surfaceParam === 'comparison' || surfaceParam === 'audit' || surfaceParam === 'about'
+      ? surfaceParam
+      : hasAlignResults
+        ? 'overview'
+        : 'audit';
+  const setActiveAlignSurface = React.useCallback(
+    (surface: AlignSurface) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (surface === 'overview') {
+            next.delete('surface');
+          } else {
+            next.set('surface', surface);
+          }
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
+  const [alignFilters, setAlignFilters] = React.useState<AlignFilters>({
+    searchText: '',
+    outputModel: 'all',
+    judgeModel: 'all',
+    promptClassification: 'all',
+    focusArea: 'all',
+    tier: 'all',
+    responseStatus: 'all',
+  });
+  const [alignModelScope, setAlignModelScope] = React.useState<AlignModelScope>({
+    primaryModel: 'all',
+    comparisonModel: 'none',
+  });
+
+  const alignFilterOptions = React.useMemo(
+    () => getAlignFilterOptions(alignRecords),
+    [alignRecords],
+  );
+  const alignModelOptions = React.useMemo(
+    () =>
+      Array.from(
+        new Set(
+          alignRecords.map((record) =>
+            JSON.stringify({ id: record.outputModelId, display: record.outputModelDisplay }),
+          ),
+        ),
+      )
+        .map((value) => JSON.parse(value) as { id: string; display: string })
+        .sort((left, right) => left.display.localeCompare(right.display)),
+    [alignRecords],
+  );
+  const scopedAlignRecords = React.useMemo(() => {
+    if (alignModelScope.primaryModel === 'all') {
+      return alignRecords;
+    }
+
+    const allowed = new Set([alignModelScope.primaryModel]);
+    if (
+      alignModelScope.comparisonModel !== 'none' &&
+      alignModelScope.comparisonModel !== alignModelScope.primaryModel
+    ) {
+      allowed.add(alignModelScope.comparisonModel);
+    }
+
+    return alignRecords.filter((record) => allowed.has(record.outputModelId));
+  }, [alignRecords, alignModelScope]);
+  const filteredAlignRecords = React.useMemo(
+    () => filterAlignRecords(scopedAlignRecords, alignFilters),
+    [scopedAlignRecords, alignFilters],
+  );
+
+  React.useEffect(() => {
+    setAlignFilters((prev) => ({
+      ...prev,
+      outputModel:
+        prev.outputModel === 'all' || alignFilterOptions.outputModels.includes(prev.outputModel)
+          ? prev.outputModel
+          : 'all',
+      judgeModel:
+        prev.judgeModel === 'all' || alignFilterOptions.judgeModels.includes(prev.judgeModel)
+          ? prev.judgeModel
+          : 'all',
+      promptClassification:
+        prev.promptClassification === 'all' ||
+        alignFilterOptions.promptClassifications.includes(prev.promptClassification)
+          ? prev.promptClassification
+          : 'all',
+      focusArea:
+        prev.focusArea === 'all' || alignFilterOptions.focusAreas.includes(prev.focusArea)
+          ? prev.focusArea
+          : 'all',
+      tier: prev.tier === 'all' || alignFilterOptions.tiers.includes(prev.tier) ? prev.tier : 'all',
+      responseStatus:
+        prev.responseStatus === 'all' ||
+        alignFilterOptions.responseStatuses.includes(prev.responseStatus)
+          ? prev.responseStatus
+          : 'all',
+    }));
+  }, [alignFilterOptions]);
+
+  React.useEffect(() => {
+    setAlignModelScope((prev) => {
+      if (prev.primaryModel === 'all') {
+        return { ...prev, comparisonModel: 'none' };
+      }
+
+      const knownModelIds = new Set(alignModelOptions.map((option) => option.id));
+      return {
+        primaryModel: knownModelIds.has(prev.primaryModel) ? prev.primaryModel : 'all',
+        comparisonModel:
+          prev.comparisonModel === 'none' || knownModelIds.has(prev.comparisonModel)
+            ? prev.comparisonModel
+            : 'none',
+      };
+    });
+  }, [alignModelOptions]);
+
+  const benchmarkName = React.useMemo(
+    () => config?.description || 'ALIGN Benchmark',
+    [config?.description],
+  );
+  const benchmarkVersion = React.useMemo(() => {
+    const versionCandidate =
+      (config?.metadata as { benchmarkVersion?: string; version?: string } | undefined)
+        ?.benchmarkVersion ||
+      (config?.metadata as { benchmarkVersion?: string; version?: string } | undefined)?.version ||
+      config?.tags?.benchmarkVersion ||
+      config?.tags?.version ||
+      null;
+
+    return versionCandidate ? String(versionCandidate) : null;
+  }, [config?.metadata, config?.tags]);
+
+  const selectedPrimaryModelDisplay = React.useMemo(() => {
+    if (alignModelScope.primaryModel === 'all') {
+      return undefined;
+    }
+    return (
+      alignModelOptions.find((option) => option.id === alignModelScope.primaryModel)?.display ||
+      getModelDisplayName(alignModelScope.primaryModel)
+    );
+  }, [alignModelOptions, alignModelScope.primaryModel]);
+
+  const selectedComparisonModelDisplay = React.useMemo(() => {
+    if (alignModelScope.comparisonModel === 'none') {
+      return undefined;
+    }
+    return (
+      alignModelOptions.find((option) => option.id === alignModelScope.comparisonModel)?.display ||
+      getModelDisplayName(alignModelScope.comparisonModel)
+    );
+  }, [alignModelOptions, alignModelScope.comparisonModel]);
+
+  const handleAlignFocusAreaSelect = React.useCallback((focusArea: string) => {
+    setAlignFilters((prev) => ({
+      ...prev,
+      focusArea: prev.focusArea === focusArea ? 'all' : focusArea,
+    }));
+  }, []);
+
+  const handleRemoveAlignFilter = React.useCallback(
+    (
+      key:
+        | 'searchText'
+        | 'outputModel'
+        | 'judgeModel'
+        | 'promptClassification'
+        | 'focusArea'
+        | 'tier'
+        | 'responseStatus'
+        | 'primaryModel'
+        | 'comparisonModel',
+    ) => {
+      if (key === 'primaryModel') {
+        setAlignModelScope({ primaryModel: 'all', comparisonModel: 'none' });
+        return;
+      }
+
+      if (key === 'comparisonModel') {
+        setAlignModelScope((prev) => ({ ...prev, comparisonModel: 'none' }));
+        return;
+      }
+
+      setAlignFilters((prev) => ({
+        ...prev,
+        [key]: key === 'searchText' ? '' : 'all',
+      }));
+    },
+    [],
+  );
+
+  const handleClearAllAlignFilters = React.useCallback(() => {
+    setAlignModelScope({ primaryModel: 'all', comparisonModel: 'none' });
+    setAlignFilters({
+      searchText: '',
+      outputModel: 'all',
+      judgeModel: 'all',
+      promptClassification: 'all',
+      focusArea: 'all',
+      tier: 'all',
+      responseStatus: 'all',
+    });
+  }, []);
 
   const handleFilterModeChange = (mode: EvalResultsFilterMode) => {
     setFilterMode(mode);
@@ -354,9 +737,6 @@ export default function ResultsView({
 
   // State for download dialog
   const [downloadDialogOpen, setDownloadDialogOpen] = React.useState(false);
-
-  const currentEvalId = evalId || defaultEvalId || 'default';
-  const validEvalId = evalId || defaultEvalId;
 
   const handleShareButtonClick = async () => {
     if (IS_RUNNING_LOCALLY) {
@@ -801,7 +1181,337 @@ export default function ResultsView({
           }
           contentClassName={activeView === 'report' ? 'max-w-7xl mx-auto w-full' : undefined}
         >
-          {activeView === 'results' && (
+          {activeView === 'results' && hasAlignResults && (
+            <div className="mt-4 space-y-3 border-t border-border/50 pt-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <Tabs
+                  value={activeAlignSurface}
+                  onValueChange={(value) => setActiveAlignSurface(value as AlignSurface)}
+                >
+                  <TabsList>
+                    <TabsTrigger value="overview">ALIGN Overview</TabsTrigger>
+                    <TabsTrigger value="comparison">Prompt Comparison</TabsTrigger>
+                    <TabsTrigger value="about">About ALIGN</TabsTrigger>
+                    <TabsTrigger value="audit">Audit Table</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+                <div className="flex-1" />
+                <Badge variant="secondary" className="text-xs">
+                  {filteredAlignRecords.length} of {alignRecords.length} classifications visible
+                </Badge>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/70 bg-white/70 px-3 py-3 dark:bg-zinc-900/70">
+                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Model view
+                </div>
+                <Select
+                  value={alignModelScope.primaryModel}
+                  onValueChange={(value) =>
+                    setAlignModelScope((prev) => ({
+                      primaryModel: value,
+                      comparisonModel: value === 'all' ? 'none' : prev.comparisonModel,
+                    }))
+                  }
+                >
+                  <SelectTrigger className="w-[190px] h-8 text-xs">Primary model</SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All models</SelectItem>
+                    {alignModelOptions.map((model) => (
+                      <SelectItem key={model.id} value={model.id}>
+                        {model.display}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={alignModelScope.comparisonModel}
+                  onValueChange={(value) =>
+                    setAlignModelScope((prev) => ({
+                      ...prev,
+                      comparisonModel: value,
+                    }))
+                  }
+                  disabled={alignModelScope.primaryModel === 'all'}
+                >
+                  <SelectTrigger className="w-[210px] h-8 text-xs">Compare against</SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No comparison model</SelectItem>
+                    {alignModelOptions
+                      .filter((model) => model.id !== alignModelScope.primaryModel)
+                      .map((model) => (
+                        <SelectItem key={model.id} value={model.id}>
+                          {model.display}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                <div className="flex-1" />
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Target className="size-4" />
+                  {selectedPrimaryModelDisplay
+                    ? selectedComparisonModelDisplay
+                      ? `Comparing ${selectedPrimaryModelDisplay} vs ${selectedComparisonModelDisplay}`
+                      : `Focused on ${selectedPrimaryModelDisplay}`
+                    : 'Showing all evaluated models'}
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 items-center">
+                <SearchInput
+                  value={alignFilters.searchText}
+                  onChange={(value) => setAlignFilters((prev) => ({ ...prev, searchText: value }))}
+                  onClear={() => setAlignFilters((prev) => ({ ...prev, searchText: '' }))}
+                  containerClassName="w-[240px]"
+                  className="h-8 text-xs"
+                  placeholder="Search prompt, reason, or response..."
+                />
+                <Select
+                  value={alignFilters.outputModel}
+                  onValueChange={(value) =>
+                    setAlignFilters((prev) => ({ ...prev, outputModel: value }))
+                  }
+                >
+                  <SelectTrigger className="w-[180px] h-8 text-xs">Output model</SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All output models</SelectItem>
+                    {alignFilterOptions.outputModels.map((model) => (
+                      <SelectItem key={model} value={model}>
+                        {model}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={alignFilters.judgeModel}
+                  onValueChange={(value) =>
+                    setAlignFilters((prev) => ({ ...prev, judgeModel: value }))
+                  }
+                >
+                  <SelectTrigger className="w-[190px] h-8 text-xs">Judge model</SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All judge models</SelectItem>
+                    {alignFilterOptions.judgeModels.map((model) => (
+                      <SelectItem key={model} value={model}>
+                        {model}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={alignFilters.promptClassification}
+                  onValueChange={(value) =>
+                    setAlignFilters((prev) => ({ ...prev, promptClassification: value }))
+                  }
+                >
+                  <SelectTrigger className="w-[180px] h-8 text-xs">Prompt class</SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All prompt classes</SelectItem>
+                    {alignFilterOptions.promptClassifications.map((classification) => (
+                      <SelectItem key={classification} value={classification}>
+                        {classification}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={alignFilters.focusArea}
+                  onValueChange={(value) =>
+                    setAlignFilters((prev) => ({ ...prev, focusArea: value }))
+                  }
+                >
+                  <SelectTrigger className="w-[160px] h-8 text-xs">Focus area</SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All focus areas</SelectItem>
+                    {alignFilterOptions.focusAreas.map((focusArea) => (
+                      <SelectItem key={focusArea} value={focusArea}>
+                        {focusArea}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={alignFilters.tier}
+                  onValueChange={(value) => setAlignFilters((prev) => ({ ...prev, tier: value }))}
+                >
+                  <SelectTrigger className="w-[180px] h-8 text-xs">ALIGN tier</SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All ALIGN tiers</SelectItem>
+                    {alignFilterOptions.tiers.map((tier) => (
+                      <SelectItem key={tier} value={tier}>
+                        {tier}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={alignFilters.responseStatus}
+                  onValueChange={(value) =>
+                    setAlignFilters((prev) => ({ ...prev, responseStatus: value }))
+                  }
+                >
+                  <SelectTrigger className="w-[190px] h-8 text-xs">Response status</SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All response statuses</SelectItem>
+                    {alignFilterOptions.responseStatuses.map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {status}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <AlignActiveFiltersBar
+                alignFilters={alignFilters}
+                alignModelScope={alignModelScope}
+                primaryModelDisplay={selectedPrimaryModelDisplay}
+                comparisonModelDisplay={selectedComparisonModelDisplay}
+                onRemove={handleRemoveAlignFilter}
+                onClearAll={handleClearAllAlignFilters}
+              />
+              <AlignTierLegend />
+            </div>
+          )}
+          {activeView === 'results' && hasAlignResults && activeAlignSurface === 'audit' && (
+            <div className="mt-4 flex flex-col gap-3 border-t border-border/50 pt-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <Tabs
+                  value={activeAlignSurface}
+                  onValueChange={(value) => setActiveAlignSurface(value as AlignSurface)}
+                >
+                  <TabsList>
+                    <TabsTrigger value="overview">ALIGN Overview</TabsTrigger>
+                    <TabsTrigger value="comparison">Prompt Comparison</TabsTrigger>
+                    <TabsTrigger value="about">About ALIGN</TabsTrigger>
+                    <TabsTrigger value="audit">Audit Table</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+              <div className="flex flex-wrap gap-2 items-center">
+                <SearchInput
+                  value={searchInputValue}
+                  onChange={(value) => {
+                    setSearchInputValue(value);
+                    debouncedUpdate(value);
+                  }}
+                  onClear={handleClearSearch}
+                  containerClassName="w-[200px]"
+                  className="h-8 text-xs"
+                />
+                <FiltersForm />
+                <div className="flex-1" />
+                <Select
+                  value={String(resultsTableZoom)}
+                  onValueChange={(val) => setResultsTableZoom(Number(val))}
+                >
+                  <SelectTrigger className="w-[115px] h-8 text-xs">
+                    <span>
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        ZOOM
+                      </span>{' '}
+                      {Math.round(resultsTableZoom * 100)}%
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0.5">50%</SelectItem>
+                    <SelectItem value="0.75">75%</SelectItem>
+                    <SelectItem value="0.9">90%</SelectItem>
+                    <SelectItem value="1">100%</SelectItem>
+                    <SelectItem value="1.25">125%</SelectItem>
+                    <SelectItem value="1.5">150%</SelectItem>
+                    <SelectItem value="2">200%</SelectItem>
+                  </SelectContent>
+                </Select>
+                <ColumnSelector
+                  columnData={columnData}
+                  selectedColumns={currentColumnState.selectedColumns}
+                  onChange={handleChange}
+                />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setViewSettingsModalOpen(true)}
+                    >
+                      <Settings className="size-4 mr-2" />
+                      Table Settings
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Edit table view settings</TooltipContent>
+                </Tooltip>
+              </div>
+              <div className="flex flex-wrap gap-2 items-center">
+                <span className="text-xs font-medium text-muted-foreground">Display:</span>
+                <FilterModeSelector
+                  filterMode={filterMode}
+                  onChange={handleFilterModeChange}
+                  showDifferentOption={visiblePromptCount > 1}
+                />
+                {config?.redteam !== undefined && (
+                  <>
+                    <Separator orientation="vertical" className="h-5 mx-1" />
+                    <FilterChips />
+                  </>
+                )}
+                {debouncedSearchText && (
+                  <Badge variant="secondary" className="text-xs h-5 gap-1">
+                    Search:{' '}
+                    {debouncedSearchText.length > 5
+                      ? debouncedSearchText.substring(0, 5) + '...'
+                      : debouncedSearchText}
+                    <button
+                      type="button"
+                      onClick={handleClearSearch}
+                      className="ml-1 hover:bg-muted rounded-full"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </Badge>
+                )}
+                {filterMode !== 'all' && (
+                  <Badge variant="secondary" className="text-xs h-5 gap-1">
+                    Filter: {filterMode}
+                    <button
+                      type="button"
+                      onClick={() => setFilterMode('all')}
+                      className="ml-1 hover:bg-muted rounded-full"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </Badge>
+                )}
+                {filters.appliedCount > 0 && (
+                  <AppliedFilterBadges
+                    filters={appliedFilters}
+                    isRedteamEval={isRedteamEval}
+                    onRemoveFilter={removeFilter}
+                    policyIdToNameMap={filters.policyIdToNameMap}
+                  />
+                )}
+                {highlightedResultsCount > 0 && (
+                  <Badge className="bg-primary/10 text-primary border border-primary/20 font-medium">
+                    {highlightedResultsCount} highlighted
+                  </Badge>
+                )}
+                {userRatedResultsCount > 0 && (
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <Badge
+                        className="bg-purple-50 text-purple-700 border border-purple-200 font-medium cursor-pointer hover:bg-purple-100 dark:bg-purple-950/30 dark:text-purple-300 dark:border-purple-800 dark:hover:bg-purple-950/50"
+                        onClick={() => setFilterMode('user-rated')}
+                      >
+                        {userRatedResultsCount} user-rated
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {userRatedResultsCount} output{userRatedResultsCount === 1 ? '' : 's'} with
+                      user ratings. Click to filter.
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+              </div>
+            </div>
+          )}
+          {activeView === 'results' && !hasAlignResults && (
             <ResultsChartsSection
               key={`${currentEvalId}:${isRedteamEval ? 'redteam' : canRenderResultsCharts ? 'eligible' : 'ineligible'}`}
               canRenderResultsCharts={canRenderResultsCharts}
@@ -940,31 +1650,61 @@ export default function ResultsView({
               )}
             </ResultsChartsSection>
           )}
-          {currentColumnState.selectedColumns.length < columnData.length && (
-            <div className="flex flex-wrap gap-2 items-center mt-2">
-              <HiddenColumnChips
-                columnData={columnData}
-                selectedColumns={currentColumnState.selectedColumns}
-                onChange={handleChange}
-              />
-            </div>
-          )}
+          {(!hasAlignResults || activeAlignSurface === 'audit') &&
+            currentColumnState.selectedColumns.length < columnData.length && (
+              <div className="flex flex-wrap gap-2 items-center mt-2">
+                <HiddenColumnChips
+                  columnData={columnData}
+                  selectedColumns={currentColumnState.selectedColumns}
+                  onChange={handleChange}
+                />
+              </div>
+            )}
         </EvalHeader>
         {activeView === 'results' && (
-          <div className="px-4 flex flex-1 min-h-0 flex-col">
-            <ResultsTable
-              key={currentEvalId}
-              maxTextLength={maxTextLength}
-              columnVisibility={currentColumnState.columnVisibility}
-              wordBreak={wordBreak}
-              showStats={showInferenceDetails}
-              filterMode={filterMode}
-              failureFilter={failureFilter}
-              debouncedSearchText={debouncedSearchText}
-              onFailureFilterToggle={handleFailureFilterToggle}
-              zoom={resultsTableZoom}
-            />
-          </div>
+          <>
+            {hasAlignResults && activeAlignSurface === 'overview' && (
+              <div className="px-4 py-6 flex-1">
+                <AlignOverview
+                  records={filteredAlignRecords}
+                  benchmarkName={benchmarkName}
+                  benchmarkVersion={benchmarkVersion}
+                  selectedPrimaryModel={selectedPrimaryModelDisplay}
+                  selectedComparisonModel={selectedComparisonModelDisplay}
+                  selectedFocusArea={
+                    alignFilters.focusArea === 'all' ? undefined : alignFilters.focusArea
+                  }
+                  onFocusAreaSelect={handleAlignFocusAreaSelect}
+                />
+              </div>
+            )}
+            {hasAlignResults && activeAlignSurface === 'comparison' && (
+              <div className="px-4 py-6 flex-1">
+                <AlignComparisonView records={filteredAlignRecords} />
+              </div>
+            )}
+            {hasAlignResults && activeAlignSurface === 'about' && (
+              <div className="px-4 py-6 flex-1">
+                <AlignAboutView />
+              </div>
+            )}
+            {(!hasAlignResults || activeAlignSurface === 'audit') && (
+              <div className="px-4 flex flex-1 min-h-0 flex-col">
+                <ResultsTable
+                  key={currentEvalId}
+                  maxTextLength={maxTextLength}
+                  columnVisibility={currentColumnState.columnVisibility}
+                  wordBreak={wordBreak}
+                  showStats={showInferenceDetails}
+                  filterMode={filterMode}
+                  failureFilter={failureFilter}
+                  debouncedSearchText={debouncedSearchText}
+                  onFailureFilterToggle={handleFailureFilterToggle}
+                  zoom={resultsTableZoom}
+                />
+              </div>
+            )}
+          </>
         )}
         {activeView === 'report' && validEvalId && (
           <React.Suspense
