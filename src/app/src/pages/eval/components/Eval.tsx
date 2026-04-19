@@ -62,20 +62,25 @@ export default function Eval({ fetchId }: EvalOptions) {
   const [failed, setFailed] = useState(false);
   const [recentEvals, setRecentEvals] = useState<ResultLightweightWithLabel[]>([]);
   const [defaultEvalId, setDefaultEvalId] = useState<string | undefined>(undefined);
-  const shouldPreferStaticDemo = !IS_RUNNING_LOCALLY && !apiBaseUrl;
+  const shouldPreferStaticDemo = !IS_RUNNING_LOCALLY;
 
   // ================================
   // Handlers
   // ================================
 
   const fetchRecentFileEvals = async () => {
-    const resp = await callApi(`/results`, { cache: 'no-store' });
-    if (!resp.ok) {
+    try {
+      const resp = await callApi(`/results`, { cache: 'no-store' });
+      if (!resp.ok) {
+        return null;
+      }
+      const body = (await resp.json()) as { data: ResultLightweightWithLabel[] };
+      setRecentEvals(body.data);
+      return body.data;
+    } catch (error) {
+      console.error('Error fetching recent eval list:', error);
       return null;
     }
-    const body = (await resp.json()) as { data: ResultLightweightWithLabel[] };
-    setRecentEvals(body.data);
-    return body.data;
   };
 
   const loadStaticDemoEval = useCallback(
