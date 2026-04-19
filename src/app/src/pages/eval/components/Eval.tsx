@@ -27,6 +27,10 @@ interface EvalOptions {
   fetchId: string | null;
 }
 
+type StaticResultsFile = ResultsFile & { evalId?: string };
+
+const STATIC_ALIGN_RESULTS_PATH = `${import.meta.env.VITE_PUBLIC_BASENAME || ''}/demo/align-latest-results.json`;
+
 export default function Eval({ fetchId }: EvalOptions) {
   const navigate = useNavigate();
   const { apiBaseUrl } = useApiConfig();
@@ -58,6 +62,7 @@ export default function Eval({ fetchId }: EvalOptions) {
   const [failed, setFailed] = useState(false);
   const [recentEvals, setRecentEvals] = useState<ResultLightweightWithLabel[]>([]);
   const [defaultEvalId, setDefaultEvalId] = useState<string | undefined>(undefined);
+  const shouldPreferStaticDemo = !IS_RUNNING_LOCALLY && !apiBaseUrl;
 
   // ================================
   // Handlers
@@ -66,13 +71,58 @@ export default function Eval({ fetchId }: EvalOptions) {
   const fetchRecentFileEvals = async () => {
     const resp = await callApi(`/results`, { cache: 'no-store' });
     if (!resp.ok) {
-      setFailed(true);
-      return;
+      return null;
     }
     const body = (await resp.json()) as { data: ResultLightweightWithLabel[] };
     setRecentEvals(body.data);
     return body.data;
   };
+
+  const loadStaticDemoEval = useCallback(
+    async (requestedEvalId?: string | null) => {
+      try {
+        const resp = await fetch(STATIC_ALIGN_RESULTS_PATH, { cache: 'no-store' });
+        if (!resp.ok) {
+          return false;
+        }
+
+        const data = (await resp.json()) as StaticResultsFile;
+        const staticEvalId = data.evalId || 'align-demo-latest';
+        if (requestedEvalId && requestedEvalId !== staticEvalId) {
+          return false;
+        }
+
+        await setTableFromResultsFile(data);
+        setConfig(data.config);
+        setAuthor(data.author ?? null);
+        setEvalId(staticEvalId);
+        setDefaultEvalId(staticEvalId);
+
+        const description = data.config.description || 'ALIGN Demo Results';
+        const createdAt = Number.isFinite(Date.parse(data.createdAt))
+          ? Date.parse(data.createdAt)
+          : Date.now();
+
+        setRecentEvals([
+          {
+            evalId: staticEvalId,
+            datasetId: null,
+            createdAt,
+            description,
+            numTests: data.results.results.length,
+            isRedteam: Boolean(data.config.redteam),
+            label: description,
+          },
+        ]);
+
+        return true;
+      } catch (error) {
+        console.error('Error loading static ALIGN demo eval:', error);
+        return false;
+      }
+    },
+    [setAuthor, setConfig, setEvalId, setTableFromResultsFile],
+  );
 
   /**
    * Triggers the fetching of a specific eval by id. Eval data is populated in the table store.
@@ -199,12 +249,18 @@ export default function Eval({ fetchId }: EvalOptions) {
     if (fetchId) {
       logger.debug('[Eval] Fetching eval by id', { fetchId });
       const run = async () => {
-        const success = await loadEvalById(fetchId);
+        const success = shouldPreferStaticDemo
+          ? await loadStaticDemoEval(fetchId)
+          : await loadEvalById(fetchId);
         if (success) {
           setDefaultEvalId(fetchId);
           // Load other recent eval runs
-          fetchRecentFileEvals();
+          if (!shouldPreferStaticDemo) {
+            fetchRecentFileEvals();
+          }
           // Note: setLoaded(true) is handled by the useEffect that watches for table updates
+        } else {
+          setFailed(true);
         }
       };
       run();
@@ -290,6 +346,13 @@ export default function Eval({ fetchId }: EvalOptions) {
       logger.debug('[Eval] Fetching eval via recent', {});
       // Fetch from server
       const run = async () => {
+        if (shouldPreferStaticDemo) {
+          const success = await loadStaticDemoEval();
+          if (success) {
+            return;
+          }
+        }
+
         const evals = await fetchRecentFileEvals();
         if (evals && evals.length > 0) {
           const defaultEvalId = evals[0].evalId;
@@ -297,15 +360,20 @@ export default function Eval({ fetchId }: EvalOptions) {
           if (success) {
             setDefaultEvalId(defaultEvalId);
             // Note: setLoaded(true) is handled by the useEffect that watches for table updates
+            return;
           }
-        } else {
-          // No evals exist - clear stale state and show empty state
-          setTable(null);
-          setConfig(null);
-          setEvalId('');
-          setAuthor(null);
-          setLoaded(true);
         }
+
+        if (!shouldPreferStaticDemo && (await loadStaticDemoEval())) {
+          return;
+        }
+
+        // No evals exist - clear stale state and show empty state
+        setTable(null);
+        setConfig(null);
+        setEvalId('');
+        setAuthor(null);
+        setLoaded(true);
       };
       run();
     }
@@ -316,6 +384,7 @@ export default function Eval({ fetchId }: EvalOptions) {
     apiBaseUrl,
     fetchId,
     loadEvalById,
+    loadStaticDemoEval,
     setTableFromResultsFile,
     setConfig,
     setAuthor,
@@ -324,6 +393,7 @@ export default function Eval({ fetchId }: EvalOptions) {
     setInComparisonMode,
     setComparisonEvalIds,
     setIsStreaming,
+    shouldPreferStaticDemo,
     // Note: resetFilters and addFilter are accessed via getState() to avoid dependency issues
   ]);
 
