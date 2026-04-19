@@ -64,6 +64,25 @@ export default function Eval({ fetchId }: EvalOptions) {
   const [defaultEvalId, setDefaultEvalId] = useState<string | undefined>(undefined);
   const shouldPreferStaticDemo = !IS_RUNNING_LOCALLY;
 
+  useEffect(() => {
+    console.debug('[Eval] Mount state', {
+      fetchId,
+      isRunningLocally: IS_RUNNING_LOCALLY,
+      apiBaseUrl,
+      shouldPreferStaticDemo,
+    });
+  }, [apiBaseUrl, fetchId, shouldPreferStaticDemo]);
+
+  useEffect(() => {
+    console.debug('[Eval] Render state', {
+      loaded,
+      failed,
+      hasTable: Boolean(table),
+      evalId,
+      defaultEvalId,
+    });
+  }, [defaultEvalId, evalId, failed, loaded, table]);
+
   // ================================
   // Handlers
   // ================================
@@ -86,18 +105,36 @@ export default function Eval({ fetchId }: EvalOptions) {
   const loadStaticDemoEval = useCallback(
     async (requestedEvalId?: string | null) => {
       try {
+        console.debug('[Eval] Static demo fetch start', {
+          path: STATIC_ALIGN_RESULTS_PATH,
+          requestedEvalId,
+        });
         const resp = await fetch(STATIC_ALIGN_RESULTS_PATH, { cache: 'no-store' });
         if (!resp.ok) {
+          console.debug('[Eval] Static demo fetch failed', { status: resp.status });
           return false;
         }
 
         const data = (await resp.json()) as StaticResultsFile;
+        console.debug('[Eval] Static demo fetch success', {
+          evalId: data.evalId,
+          version: data.version,
+          hasPrompts: Boolean(data.prompts?.length),
+          resultsCount: data.results?.results?.length,
+        });
         const staticEvalId = data.evalId || 'align-demo-latest';
         if (requestedEvalId && requestedEvalId !== staticEvalId) {
+          console.debug('[Eval] Static demo eval id mismatch', {
+            requestedEvalId,
+            staticEvalId,
+          });
           return false;
         }
 
         await setTableFromResultsFile(data);
+        console.debug('[Eval] Static demo normalization success', {
+          hasTableAfterNormalize: Boolean(useTableStore.getState().table),
+        });
         setConfig(data.config);
         setAuthor(data.author ?? null);
         setEvalId(staticEvalId);
@@ -119,6 +156,9 @@ export default function Eval({ fetchId }: EvalOptions) {
             label: description,
           },
         ]);
+
+        console.debug('[Eval] Static demo setting loaded=true', { staticEvalId });
+        setLoaded(true);
 
         return true;
       } catch (error) {
@@ -416,9 +456,12 @@ export default function Eval({ fetchId }: EvalOptions) {
    */
   useEffect(() => {
     if (table && !loaded) {
+      console.debug('[Eval] Table became available, setting loaded=true', {
+        evalId,
+      });
       setLoaded(true);
     }
-  }, [table, loaded]);
+  }, [evalId, table, loaded]);
 
   // ================================
   // Rendering
@@ -428,7 +471,7 @@ export default function Eval({ fetchId }: EvalOptions) {
     return <div className="notice">404 Eval not found</div>;
   }
 
-  if (!loaded) {
+  if (!loaded && !table) {
     return (
       <div className="notice">
         <div>
